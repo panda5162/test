@@ -1,6 +1,8 @@
 from easydict import EasyDict as edict
 import json
 
+jjjj
+
 config = edict()
 config.TRAIN = edict()
 
