@@ -162,7 +162,7 @@ class Reader:
 
     def slim_get_split(self, serialized_example):
 
-        """
+        """""
                Introduction
                ------------
                    解析tfRecord数据
