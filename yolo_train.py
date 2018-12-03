@@ -16,9 +16,9 @@ from utils import *
 # 指定使用GPU的Index
 os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu_index
 
-beta1 = config.TRAIN.beta1
-alpha = config.TRAIN.alpha
-beta = config.TRAIN.beta
+beta1 = config.beta1
+alpha = config.alpha
+beta = config.beta
 
 def train():
     """

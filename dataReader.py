@@ -160,71 +160,105 @@ class Reader:
         return image, bbox
 
 
-    def slim_get_split(self, file_pattern='{}_????'):
-        """
-        解析tfRecord数据
-        """
-        # Features in Pascal VOC TFRecords.
-        keys_to_features = {
-            'image/encoded': tf.FixedLenFeature((), tf.string, default_value=''),
-            'image/format': tf.FixedLenFeature((), tf.string, default_value='jpeg'),
-            'image/filename': tf.FixedLenFeature((), tf.string, default_value=''),
-            'image/height': tf.FixedLenFeature([1], tf.int64),
-            'image/width': tf.FixedLenFeature([1], tf.int64),
-            'image/channels': tf.FixedLenFeature([1], tf.int64),
-            'image/shape': tf.FixedLenFeature([3], tf.int64),
-            'image/object/bbox/xmin': tf.VarLenFeature(dtype=tf.float32),
-            'image/object/bbox/ymin': tf.VarLenFeature(dtype=tf.float32),
-            'image/object/bbox/xmax': tf.VarLenFeature(dtype=tf.float32),
-            'image/object/bbox/ymax': tf.VarLenFeature(dtype=tf.float32),
-            'image/object/bbox/label': tf.VarLenFeature(dtype=tf.int64),
-            'image/object/bbox/difficult': tf.VarLenFeature(dtype=tf.int64),
-            'image/object/bbox/truncated': tf.VarLenFeature(dtype=tf.int64),
-        }
-        items_to_handlers = {
-            'image': slim.tfexample_decoder.Image('image/encoded', 'image/format'),
-            'filename': slim.tfexample_decoder.Tensor('image/filename'),
-            'shape': slim.tfexample_decoder.Tensor('image/shape'),
-            'object/bbox/xmin': slim.tfexample_decoder.Tensor('image/object/bbox/xmin'),
-            'object/bbox/ymin': slim.tfexample_decoder.Tensor('image/object/bbox/ymin'),
-            'object/bbox/xmax': slim.tfexample_decoder.Tensor('image/object/bbox/xmax'),
-            'object/bbox/ymax': slim.tfexample_decoder.Tensor('image/object/bbox/ymax'),
-            'object/label': slim.tfexample_decoder.Tensor('image/object/bbox/label'),
-            'object/difficult': slim.tfexample_decoder.Tensor('image/object/bbox/difficult'),
-            'object/truncated': slim.tfexample_decoder.Tensor('image/object/bbox/truncated'),
-        }
-        decoder = slim.tfexample_decoder.TFExampleDecoder(keys_to_features, items_to_handlers)
+    def slim_get_split(self, serialized_example):
 
-        dataset = slim.dataset.Dataset(
-            data_sources=file_pattern,
-            reader=tf.TFRecordReader,
-            decoder=decoder,
-            num_samples=100,
-            items_to_descriptions=None,
-            num_classes=21,
-            labels_to_names=None)
-
-        with tf.name_scope('dataset_data_provider'):
-            provider = slim.dataset_data_provider.DatasetDataProvider(
-                dataset,
-                num_readers=2,
-                common_queue_capacity=32,
-                common_queue_min=8,
-                shuffle=True,
-                num_epochs=1)
-        [image, xmin, ymin, xmax, ymax, label] = provider.get(
-            ['image',
-             'object/bbox/xmin',
-             'object/bbox/ymin',
-             'object/bbox/xmax',
-             'object/bbox/ymax',
-             'object/label'])
+        """
+               Introduction
+               ------------
+                   解析tfRecord数据
+               Parameters
+               ----------
+                   serialized_example: 序列化的每条数据
+               """
+        features = tf.parse_single_example(
+            serialized_example,
+            features={
+                'image/encoded': tf.FixedLenFeature([], dtype=tf.string),
+                'image/object/bbox/xmin': tf.VarLenFeature(dtype=tf.float32),
+                'image/object/bbox/xmax': tf.VarLenFeature(dtype=tf.float32),
+                'image/object/bbox/ymin': tf.VarLenFeature(dtype=tf.float32),
+                'image/object/bbox/ymax': tf.VarLenFeature(dtype=tf.float32),
+                'image/object/bbox/label': tf.VarLenFeature(dtype=tf.float32)
+            }
+        )
+        image = tf.image.decode_jpeg(features['image/encoded'], channels=3)
+        image = tf.image.convert_image_dtype(image, tf.uint8)
+        xmin = tf.expand_dims(features['image/object/bbox/xmin'].values, axis=0)
+        ymin = tf.expand_dims(features['image/object/bbox/ymin'].values, axis=0)
+        xmax = tf.expand_dims(features['image/object/bbox/xmax'].values, axis=0)
+        ymax = tf.expand_dims(features['image/object/bbox/ymax'].values, axis=0)
+        label = tf.expand_dims(features['image/object/bbox/label'].values, axis=0)
         bbox = tf.concat(axis=0, values=[xmin, ymin, xmax, ymax, label])
         bbox = tf.transpose(bbox, [1, 0])
         image, bbox = self.Preprocess(image, bbox)
         bbox_true_13, bbox_true_26, bbox_true_52 = tf.py_func(self.Preprocess_true_boxes, [bbox],
                                                               [tf.float32, tf.float32, tf.float32])
         return image, bbox, bbox_true_13, bbox_true_26, bbox_true_52
+
+        # """
+        # 解析tfRecord数据
+        # """
+        # # Features in Pascal VOC TFRecords.
+        # keys_to_features = {
+        #     'image/encoded': tf.FixedLenFeature((), tf.string, default_value=''),
+        #     'image/format': tf.FixedLenFeature((), tf.string, default_value='jpeg'),
+        #     'image/filename': tf.FixedLenFeature((), tf.string, default_value=''),
+        #     'image/height': tf.FixedLenFeature([1], tf.int64),
+        #     'image/width': tf.FixedLenFeature([1], tf.int64),
+        #     'image/channels': tf.FixedLenFeature([1], tf.int64),
+        #     'image/shape': tf.FixedLenFeature([3], tf.int64),
+        #     'image/object/bbox/xmin': tf.VarLenFeature(dtype=tf.float32),
+        #     'image/object/bbox/ymin': tf.VarLenFeature(dtype=tf.float32),
+        #     'image/object/bbox/xmax': tf.VarLenFeature(dtype=tf.float32),
+        #     'image/object/bbox/ymax': tf.VarLenFeature(dtype=tf.float32),
+        #     'image/object/bbox/label': tf.VarLenFeature(dtype=tf.int64),
+        #     'image/object/bbox/difficult': tf.VarLenFeature(dtype=tf.int64),
+        #     'image/object/bbox/truncated': tf.VarLenFeature(dtype=tf.int64),
+        # }
+        # items_to_handlers = {
+        #     'image': slim.tfexample_decoder.Image('image/encoded', 'image/format'),
+        #     'filename': slim.tfexample_decoder.Tensor('image/filename'),
+        #     'shape': slim.tfexample_decoder.Tensor('image/shape'),
+        #     'object/bbox/xmin': slim.tfexample_decoder.Tensor('image/object/bbox/xmin'),
+        #     'object/bbox/ymin': slim.tfexample_decoder.Tensor('image/object/bbox/ymin'),
+        #     'object/bbox/xmax': slim.tfexample_decoder.Tensor('image/object/bbox/xmax'),
+        #     'object/bbox/ymax': slim.tfexample_decoder.Tensor('image/object/bbox/ymax'),
+        #     'object/label': slim.tfexample_decoder.Tensor('image/object/bbox/label'),
+        #     'object/difficult': slim.tfexample_decoder.Tensor('image/object/bbox/difficult'),
+        #     'object/truncated': slim.tfexample_decoder.Tensor('image/object/bbox/truncated'),
+        # }
+        # decoder = slim.tfexample_decoder.TFExampleDecoder(keys_to_features, items_to_handlers)
+        #
+        # dataset = slim.dataset.Dataset(
+        #     data_sources=file_pattern,
+        #     reader=tf.TFRecordReader,
+        #     decoder=decoder,
+        #     num_samples=100,
+        #     items_to_descriptions=None,
+        #     num_classes=21,
+        #     labels_to_names=None)
+        #
+        # with tf.name_scope('dataset_data_provider'):
+        #     provider = slim.dataset_data_provider.DatasetDataProvider(
+        #         dataset,
+        #         num_readers=2,
+        #         common_queue_capacity=32,
+        #         common_queue_min=8,
+        #         shuffle=True,
+        #         num_epochs=1)
+        # [image, xmin, ymin, xmax, ymax, label] = provider.get(
+        #     ['image',
+        #      'object/bbox/xmin',
+        #      'object/bbox/ymin',
+        #      'object/bbox/xmax',
+        #      'object/bbox/ymax',
+        #      'object/label'])
+        # bbox = tf.concat(axis=0, values=[xmin, ymin, xmax, ymax, label])
+        # bbox = tf.transpose(bbox, [1, 0])
+        # image, bbox = self.Preprocess(image, bbox)
+        # bbox_true_13, bbox_true_26, bbox_true_52 = tf.py_func(self.Preprocess_true_boxes, [bbox],
+        #                                                       [tf.float32, tf.float32, tf.float32])
+        # return image, bbox, bbox_true_13, bbox_true_26, bbox_true_52
 
 
     def build_dataset(self, batch_size):
@@ -240,7 +274,7 @@ class Reader:
             dataset: 返回tensorflow的dataset
         """
         dataset = tf.data.TFRecordDataset(filenames=self.TfrecordFile)
-        dataset = dataset.map(self.slim_get_split, num_parallel_calls = 10)
+        dataset = dataset.map(self.slim_get_split, num_parallel_calls=10)
         if self.mode == 'train':
             dataset = dataset.repeat().shuffle(9000).batch(batch_size).prefetch(batch_size)
         else:
